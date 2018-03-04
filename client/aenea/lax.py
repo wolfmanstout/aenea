@@ -87,7 +87,7 @@ class AeneaLaxDynStrActionBase(AeneaDynStrActionBase):
 class Key(AeneaLaxDynStrActionBase):
     def __init__(self, spec):
         proxy = _spec(aenea.proxy_actions.ProxyKey, [spec], {})
-        local = _spec(dragonfly.Key, [spec], {})
+        local = None # _spec(dragonfly.Key, [spec], {})
         AeneaLaxDynStrActionBase.__init__(
             self,
             proxy,
@@ -105,7 +105,7 @@ class Text(AeneaLaxDynStrActionBase):
             kw['spec'] = a[0]
         a = []
         proxy = _spec(aenea.proxy_actions.ProxyText, a, kw)
-        local = _spec(dragonfly.Text, a, kw)
+        local = None # _spec(dragonfly.Text, a, kw)
         AeneaLaxDynStrActionBase.__init__(
             self,
             proxy,
@@ -118,7 +118,7 @@ class Text(AeneaLaxDynStrActionBase):
 class Mouse(AeneaLaxDynStrActionBase):
     def __init__(self, *a, **kw):
         proxy = _spec(aenea.proxy_actions.ProxyMouse, a, kw)
-        local = _spec(dragonfly.Mouse, a, kw)
+        local = None # _spec(dragonfly.Mouse, a, kw)
         AeneaLaxDynStrActionBase.__init__(
             self,
             proxy,
