@@ -20,21 +20,27 @@ import os
 import time
 
 try:
-    import dragonfly, natlinkmain
+    import dragonfly
 except ImportError:
     import dragonfly_mock as dragonfly
+
+try:
+    import natlinkmain
+except ImportError:
+    pass
 
 try:
     STARTING_PROJECT_ROOT = natlinkmain.userDirectory
 except (AttributeError, NameError):
     # AttributeError is for older NatLink that may not have the userDirectory value.
     # NameError is if the natlinkmain module can't be loaded (e.g., running in tests).
-    STARTING_PROJECT_ROOT = 'C:\\NatLink\\NatLink\\MacroSystem'
-# userDirectory can be an empty string if unset
+    STARTING_PROJECT_ROOT = ''
 if STARTING_PROJECT_ROOT == '':
-    STARTING_PROJECT_ROOT = 'C:\\NatLink\\NatLink\\MacroSystem'
-
-STARTING_PROJECT_ROOT = '/home/jwstout/natlink/NatLink/MacroSystem'
+    import sys
+    if sys.platform.startswith('win'):
+        STARTING_PROJECT_ROOT = 'C:\\NatLink\\NatLink\\MacroSystem'
+    else:
+        STARTING_PROJECT_ROOT = '/home/jwstout/natlink_commands'
 
 _configuration = {
     'project_root': STARTING_PROJECT_ROOT,
@@ -48,7 +54,7 @@ _configuration = {
         'modifiers': {'a': 'alt', 'A': 'Alt_R', 'c': 'control', 'w': 'super', 'h': 'hyper', 'm': 'meta', 'C': 'Control_R', 's': 'shift', 'S': 'Shift_R', 'M': 'Meta_R', 'W': 'Super_R', 'H': 'Hyper_R'},
         }
 
-# _configuration['keys'] = list(set(_configuration['keys']).union(set(dragonfly.typeables.keys())))
+_configuration['keys'] = list(set(_configuration['keys']).union(set(dragonfly.typeables.keys())))
 
 if os.path.exists(os.path.join(STARTING_PROJECT_ROOT, 'aenea.json')):
     _configuration['project_root'] = STARTING_PROJECT_ROOT
@@ -117,16 +123,15 @@ def get_window_foreground():
 def proxy_active(active_window=None):
     '''Returns whether the proxy is enabled, based on context and file
        settings.'''
-    return PLATFORM == 'proxy'
-    # if active_window is None:
-    #     active_window = get_window_foreground()
-    #     active_window = (
-    #         active_window.executable,
-    #         active_window.title,
-    #         active_window.handle
-    #         )
-    # return (proxy_enable_context.matches(*active_window) and
-    #         PLATFORM == 'proxy')
+    if active_window is None:
+        active_window = get_window_foreground()
+        active_window = (
+            active_window.executable,
+            active_window.title,
+            active_window.handle
+            )
+    return (proxy_enable_context.matches(*active_window) and
+            PLATFORM == 'proxy')
 
 
 def enable_proxy():
