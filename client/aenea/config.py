@@ -31,18 +31,17 @@ try:
 except ImportError:
     import dragonfly_mock as dragonfly
 
-try:
-    STARTING_PROJECT_ROOT = natlinkmain.userDirectory
-except (AttributeError, NameError):
-    # AttributeError is for older NatLink that may not have the userDirectory value.
-    # NameError is if the natlinkmain module can't be loaded (e.g., running in tests).
-    STARTING_PROJECT_ROOT = ''
-if STARTING_PROJECT_ROOT == '':
-    import sys
-    if sys.platform.startswith('win'):
+if "DRAGONFLY_USER_DIRECTORY" in os.environ:
+    STARTING_PROJECT_ROOT = os.environ["DRAGONFLY_USER_DIRECTORY"]
+else:
+    try:
+        STARTING_PROJECT_ROOT = natlinkmain.userDirectory
+    except (AttributeError, NameError):
+        # AttributeError is for older NatLink that may not have the userDirectory value.
+        # NameError is if the natlinkmain module can't be loaded (e.g., running in tests).
+        STARTING_PROJECT_ROOT = ''
+    if STARTING_PROJECT_ROOT == '':
         STARTING_PROJECT_ROOT = 'C:\\NatLink\\NatLink\\MacroSystem'
-    else:
-        STARTING_PROJECT_ROOT = '/home/jwstout/natlink_commands'
 
 _configuration = {
     'project_root': STARTING_PROJECT_ROOT,
