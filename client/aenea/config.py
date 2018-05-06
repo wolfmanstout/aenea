@@ -20,14 +20,16 @@ import os
 import time
 
 try:
-    import dragonfly
-except ImportError:
-    import dragonfly_mock as dragonfly
-
-try:
+    # Import natlinkmain separately so that it isn't required to use Aenea with
+    # module loaders for other engines.
     import natlinkmain
 except ImportError:
     pass
+
+try:
+    import dragonfly
+except ImportError:
+    import dragonfly_mock as dragonfly
 
 try:
     STARTING_PROJECT_ROOT = natlinkmain.userDirectory
