@@ -23,6 +23,7 @@
    way on all platforms, use aenea.wrappers.strict instead.'''
 
 import aenea.proxy_actions
+import aenea.proxy_contexts
 
 try:
     import dragonfly
@@ -128,7 +129,19 @@ class Mouse(AeneaLaxDynStrActionBase):
             )
 
 
+class AppContext(AeneaContext):
+    def __init__(self, *a, **kw):
+        proxy = _spec(aenea.proxy_contexts.ProxyAppContext, a, kw)
+        local = _spec(dragonfly.AppContext, a, kw)
+        AeneaContext.__init__(
+            self,
+            proxy,
+            local
+            )
+
+
 __all__ = [
+    'AppContext',
     'Key',
     'Text',
     'Mouse'
