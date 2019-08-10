@@ -17,21 +17,24 @@
 # Copyright (2014) Alex Roper
 # Alex Roper <alex@aroper.net>
 
+import logging
 import os
+import re
 import sys
 import time
-import re
-
-import jsonrpclib
-import jsonrpclib.SimpleJSONRPCServer
-
-import config
-import logging
-
-# logging.basicConfig(level=logging.DEBUG)
+from os.path import dirname, join, realpath
 
 import applescript
 from Quartz.CoreGraphics import *
+
+import config
+# enable server.core imports by adding the root of the aenea project to path
+sys.path.append(realpath(join(dirname(__file__), '../../')))
+from server.core import AeneaPluginLoader, AeneaJSONRPCServer
+
+
+#logging.basicConfig(level=logging.DEBUG)
+
 
 _MOUSE_BUTTONS = {
     'left': 1,
@@ -74,7 +77,7 @@ _SERVER_INFO = {
 
 
 _MOD_TRANSLATION = {
-    'alt': 'alt',
+    'alt': 'option',
     'shift': 'shift',
     'control': 'control',
     'super': 'command',
@@ -90,15 +93,15 @@ _QUOTED_KEY_TRANSLATION = {
     'apostrophe': "'",
     'asterisk': '*',
     'at': '@',
-    'backslash': '\\',
+    'backslash': '\\\\',
     'backtick': '`',
-    'bar': '-',
+    'bar': '|',
     'caret': '^',
     'colon': ':',
     'comma': ',',
     'dollar': '$',
     'dot': '.',
-    'dquote': '"',
+    'dquote': '\\\"',
     'equal': '=',
     'exclamation': '!',
     'hash': '#',
@@ -125,10 +128,10 @@ _QUOTED_KEY_TRANSLATION = {
 
 _MODIFIER_KEY_DIRECT = {
     # modifiers
-    'command': 'command',
+    'win': 'command',
     'shift': 'shift',
-    'option': 'option',
-    'control': 'control',
+    'alt': 'option',
+    'ctrl': 'control',
     'rightshift': 'rightshift',
     'rightoption': 'rightoption',
     'rightcontrol': 'rightcontrol',
@@ -240,11 +243,13 @@ _KEYCODE_TRANSLATION = {
     'help': 114,
     'home': 115,
     'pgup': 116,  # pageup
+    'pageup': 116,  # pageup
     'del': 117,  # forwarddelete
     'f4': 118,
     'end': 119,
     'f2': 120,
     'pgdown': 121,  # pagedown
+    'pagedown': 121,  # pagedown
     'f1': 122,
     'left': 123,  # leftarrow
     'right': 124,  # rightarrow
@@ -347,7 +352,6 @@ def get_context():
     '''return a dictionary of window properties for the currently active
        window. it is fine to include platform specific information, but
        at least include title and executable.'''
-
     window_id, window_title = get_active_window()
     properties = get_window_properties(window_id)
     properties['id'] = window_id
@@ -381,7 +385,7 @@ def key_press(
         modifiers=(),
         direction='press',
         count=1,
-        count_delay=None
+        count_delay=None,
         ):
     '''press a key possibly modified by modifiers. direction may be
        'press', 'down', or 'up'. modifiers may contain 'alt', 'shift',
@@ -389,9 +393,9 @@ def key_press(
        'meta', and 'flag' (same as super). count is number of times to
        press it. count_delay delay in ms between presses.'''
 
-    logging.debug("\nkey = {key} modifiers = {modifiers} " +
+    logging.debug(("\nkey = {key} modifiers = {modifiers} " +
                   "direction = {direction} " +
-                  "count = {count} count_delay = {count_delay} ".
+                  "count = {count} count_delay = {count_delay} ").
                   format(modifiers=modifiers,
                          direction=direction,
                          count=count,
@@ -423,9 +427,6 @@ def key_press(
             key_to_press = _KEYCODE_TRANSLATION.get(key.lower(), None)
             command = 'key code "{0}"'.format(key_to_press)
 
-    if key_to_press is None:
-        raise RuntimeError("Don't know how to handle keystroke {0}".format(key))
-
     if modifiers:
         elems = map(lambda s: "%s down" % s, modifiers)
         key_command = "%s using {%s} " % (command, ', '.join(elems))
@@ -450,14 +451,18 @@ def key_press(
 
 def write_text(text, paste=False):
     '''send text formatted exactly as written to active window.  will use
-       pbpaste clipboard to paste the text instead of typing it.'''
-
-    logging.debug("text = %s paste = %s" % (text, paste))
+       simulate keypress typing for maximum compatibility.'''
+    logging.debug("text = %s" % (text))
     if text:
-        # copy the pasted text to the clipboard
-        write_command(text, arguments='', executable='pbcopy')
-        # paste
-        key_press('v', 'super')
+        script = applescript.AppleScript('''
+        tell application "System Events"
+          repeat with i from 1 to count characters of "{text}"
+            keystroke (character i of "{text}")
+            delay 0.0002
+          end repeat
+        end tell
+        '''.format(text=text))
+        script.run()
 
 
 def mouseEvent(type, posx, posy, clickCount=1):
@@ -504,7 +509,7 @@ def click_mouse(
         button,
         direction='click',
         count=1,
-        count_delay=None
+        count_delay=None,
         ):
     '''click the mouse button specified. button maybe one of 'right',
        'left', 'middle', 'wheeldown', 'wheelup'.'''
@@ -534,14 +539,13 @@ def move_mouse(
         y,
         reference='absolute',
         proportional=False,
-        phantom=None
+        phantom=None,
         ):
     '''move the mouse to the specified coordinates. reference may be one
     of 'absolute', 'relative', or 'relative_active'. if phantom is not
     None, it is a button as click_mouse. If possible, click that
     location without moving the mouse. If not, the server will move the
     mouse there and click.'''
-
     geo = get_geometry()
     if proportional:
         x = geo['width'] * x
@@ -580,10 +584,12 @@ def multiple_actions(actions):
        return anything ever. actions is an array of objects, possessing
        'method', 'params', and 'optional' keys. See also JSON-RPC
        multicall.  Guaranteed to execute in specified order.'''
-
     for (method, parameters, optional) in actions:
         commands = list_rpc_commands()
         if method in commands:
+            # Remove 'security_token' from the optionals dicts because we
+            # aren't calling the patched RPC functions.
+            optional.pop("security_token")
             commands[method](*parameters, **optional)
         else:
             break
@@ -591,11 +597,20 @@ def multiple_actions(actions):
 
 def setup_server(host, port):
     print "started on host = %s port = %s " % (host, port)
-    server = jsonrpclib.SimpleJSONRPCServer.SimpleJSONRPCServer((host, port))
+    security_token = getattr(config, 'SECURITY_TOKEN', None)
+    if security_token is None:
+        print "A security token is not in use. This allows any link you click in a web browser to execute arbitrary commands."
+    server = AeneaJSONRPCServer(security_token, (host, port))
 
     for command in list_rpc_commands():
+        logging.debug("registered %s", command)
         server.register_function(globals()[command])
     server.register_function(multiple_actions)
+
+    plugins = AeneaPluginLoader(logging.getLogger()).get_plugins(
+        getattr(config, 'PLUGIN_PATH', None))
+    for plugin in plugins:
+        plugin.register_rpcs(server)
 
     return server
 
